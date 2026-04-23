@@ -1,14 +1,41 @@
 import Elysia, { t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
+import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { users } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { loginUser, registerUser } from "../services/users-service";
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
-export const userRoutes = new Elysia({ prefix: "/api/users" })
+const publicUserRoutes = new Elysia({ prefix: "/api/users" })
+  .post("/login", async ({ body, set }) => {
+    try {
+      const { email, password } = body as { email: string; password: string };
+      const token = await loginUser(email, password);
+      return { data: token };
+    } catch {
+      set.status = 401;
+      return { error: "Email atau password salah" };
+    }
+  })
+  .post("/register", async ({ body, set }) => {
+    const { name, email, password } = body as { name: string; email: string; password: string };
+    try {
+      await registerUser(name, email, password);
+      return { message: "User registered successfully" };
+    } catch (e) {
+      const err = e as Error & { status?: number };
+      if (err.status === 409) {
+        set.status = 409;
+        return { message: err.message };
+      }
+      throw e;
+    }
+  });
+
+const protectedUserRoutes = new Elysia({ prefix: "/api/users" })
   .use(jwt({ name: "jwt", secret: JWT_SECRET }))
-  .onBeforeHandle(async ({ headers, jwt, set }: any) => {
+  .onBeforeHandle(async ({ headers, jwt, set }: { headers: any; jwt: any; set: any }) => {
     const auth = headers["authorization"];
     if (!auth?.startsWith("Bearer ")) {
       set.status = 401;
@@ -20,7 +47,7 @@ export const userRoutes = new Elysia({ prefix: "/api/users" })
       return { message: "Invalid token" };
     }
   })
-  .derive(async ({ headers, jwt }: any) => {
+  .derive(async ({ headers, jwt }: { headers: any; jwt: any }) => {
     const auth = headers["authorization"] ?? "";
     const payload = await jwt.verify(auth.slice(7));
     return { currentUser: payload };
@@ -105,3 +132,5 @@ export const userRoutes = new Elysia({ prefix: "/api/users" })
     },
     { params: t.Object({ id: t.String() }) }
   );
+
+export const userRoutes = new Elysia().use(publicUserRoutes).use(protectedUserRoutes);
