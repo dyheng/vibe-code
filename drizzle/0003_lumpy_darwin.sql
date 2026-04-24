@@ -1,0 +1,1 @@
+ALTER TABLE `users` MODIFY COLUMN `id` bigint unsigned AUTO_INCREMENT NOT NULL;
