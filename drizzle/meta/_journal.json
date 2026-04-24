@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1776932628827,
+      "tag": "0000_fine_owl",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1776935579662,
+      "tag": "0001_puzzling_daimon_hellstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1777005554281,
+      "tag": "0002_big_sentinel",
+      "breakpoints": true
+    }
+  ]
+}

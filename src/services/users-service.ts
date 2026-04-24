@@ -1,8 +1,16 @@
 import { eq } from "drizzle-orm";
+import type { ResultSetHeader } from "mysql2/promise";
 import { db } from "../db";
 import { sessions, users } from "../db/schema";
 
 const LOGIN_ERROR = "Email atau password salah";
+
+export class UnauthorizedError extends Error {
+  constructor(message = "Unauthorized") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
 
 export type CurrentUserPayload = {
   id: number;
@@ -14,13 +22,13 @@ export type CurrentUserPayload = {
 export async function getCurrentUser(token: string): Promise<CurrentUserPayload> {
   const sessionRows = await db.select().from(sessions).where(eq(sessions.token, token)).limit(1);
   if (sessionRows.length === 0) {
-    throw new Error("Unauthorized");
+    throw new UnauthorizedError();
   }
 
   const userId = sessionRows[0].userId;
   const userRows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (userRows.length === 0) {
-    throw new Error("Unauthorized");
+    throw new UnauthorizedError();
   }
 
   const u = userRows[0];
@@ -66,9 +74,10 @@ export async function registerUser(name: string, email: string, password: string
 }
 
 export async function logoutUser(token: string): Promise<void> {
-  const sessionRows = await db.select().from(sessions).where(eq(sessions.token, token)).limit(1);
-  if (sessionRows.length === 0) {
-    throw new Error("Unauthorized");
+  const result = await db.delete(sessions).where(eq(sessions.token, token));
+  const header = (Array.isArray(result) ? result[0] : result) as ResultSetHeader;
+  const affected = header.affectedRows ?? 0;
+  if (affected === 0) {
+    throw new UnauthorizedError();
   }
-  await db.delete(sessions).where(eq(sessions.token, token));
 }
