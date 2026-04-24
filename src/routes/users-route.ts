@@ -1,4 +1,4 @@
-import Elysia, { t } from "elysia";
+import Elysia, { t, ValidationError } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
@@ -9,6 +9,25 @@ import { getCurrentUser, loginUser, logoutUser, registerUser, UnauthorizedError 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
 const publicUserRoutes = new Elysia({ prefix: "/api/users" })
+  .onError(({ code, error, set }) => {
+    const validationFailed =
+      code === "VALIDATION" ||
+      error instanceof ValidationError ||
+      (error instanceof Error && (error as Error & { code?: string }).code === "VALIDATION");
+    if (validationFailed) {
+      set.status = 400;
+      if (error instanceof ValidationError) {
+        return {
+          error: "Bad Request",
+          errors: error.all.map((e) => ({
+            field: e.path,
+            message: e.message ?? e.summary ?? "Invalid value",
+          })),
+        };
+      }
+      return { error: "Bad Request", message: error instanceof Error ? error.message : "Validation failed" };
+    }
+  })
   .post("/login", async ({ body, set }) => {
     try {
       const { email, password } = body as { email: string; password: string };
@@ -19,20 +38,31 @@ const publicUserRoutes = new Elysia({ prefix: "/api/users" })
       return { error: "Email atau password salah" };
     }
   })
-  .post("/register", async ({ body, set }) => {
-    const { name, email, password } = body as { name: string; email: string; password: string };
-    try {
-      await registerUser(name, email, password);
-      return { message: "User registered successfully" };
-    } catch (e) {
-      const err = e as Error & { status?: number };
-      if (err.status === 409) {
-        set.status = 409;
-        return { message: err.message };
+  .post(
+    "/register",
+    async ({ body, set }) => {
+      try {
+        await registerUser(body.name, body.email, body.password);
+        return { message: "User registered successfully" };
+      } catch (e) {
+        const err = e as Error & { status?: number };
+        if (err.status === 409) {
+          set.status = 409;
+          return { message: err.message };
+        }
+        console.error("register failed:", e);
+        set.status = 500;
+        return { error: "Internal Server Error" };
       }
-      throw e;
+    },
+    {
+      body: t.Object({
+        name: t.String({ minLength: 1, maxLength: 100 }),
+        email: t.String({ minLength: 5, maxLength: 255, format: "email" }),
+        password: t.String({ minLength: 8, maxLength: 255 }),
+      }),
     }
-  });
+  );
 
 const sessionUserRoutes = new Elysia({ prefix: "/api/users" })
   .use(sessionTokenAuth)
