@@ -3,7 +3,8 @@ import { jwt } from "@elysiajs/jwt";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { users } from "../db/schema";
-import { getCurrentUser, loginUser, registerUser } from "../services/users-service";
+import { sessionTokenAuth } from "../plugins/session-token-auth";
+import { getCurrentUser, loginUser, logoutUser, registerUser, UnauthorizedError } from "../services/users-service";
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
@@ -31,20 +32,36 @@ const publicUserRoutes = new Elysia({ prefix: "/api/users" })
       }
       throw e;
     }
-  })
-  .get("/current", async ({ headers, set }) => {
-    const auth = headers["authorization"];
-    if (!auth?.startsWith("Bearer ")) {
-      set.status = 401;
-      return { error: "Unauthorized" };
-    }
+  });
+
+const sessionUserRoutes = new Elysia({ prefix: "/api/users" })
+  .use(sessionTokenAuth)
+  .get("/current", async ({ sessionToken, set }) => {
     try {
-      const token = auth.slice(7);
-      const data = await getCurrentUser(token);
+      const data = await getCurrentUser(sessionToken!);
       return { data };
-    } catch {
-      set.status = 401;
-      return { error: "Unauthorized" };
+    } catch (e) {
+      if (e instanceof UnauthorizedError) {
+        set.status = 401;
+        return { error: "Unauthorized" };
+      }
+      console.error("getCurrentUser failed:", e);
+      set.status = 500;
+      return { error: "Internal Server Error" };
+    }
+  })
+  .delete("/logout", async ({ sessionToken, set }) => {
+    try {
+      await logoutUser(sessionToken!);
+      return { data: "ok" };
+    } catch (e) {
+      if (e instanceof UnauthorizedError) {
+        set.status = 401;
+        return { error: "Unauthorized" };
+      }
+      console.error("logout failed:", e);
+      set.status = 500;
+      return { error: "Internal Server Error" };
     }
   });
 
@@ -148,4 +165,7 @@ const protectedUserRoutes = new Elysia({ prefix: "/api/users" })
     { params: t.Object({ id: t.String() }) }
   );
 
-export const userRoutes = new Elysia().use(publicUserRoutes).use(protectedUserRoutes);
+export const userRoutes = new Elysia()
+  .use(publicUserRoutes)
+  .use(sessionUserRoutes)
+  .use(protectedUserRoutes);

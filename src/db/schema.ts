@@ -10,7 +10,7 @@ export const users = mysqlTable("users", {
 
 export const sessions = mysqlTable("sessions", {
   id: int("id").autoincrement().primaryKey(),
-  token: varchar("token", { length: 255 }).notNull(),
+  token: varchar("token", { length: 255 }).notNull().unique(),
   userId: bigint("user_id", { mode: "number", unsigned: true })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
