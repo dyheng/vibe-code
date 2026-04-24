@@ -3,7 +3,7 @@ import { jwt } from "@elysiajs/jwt";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { users } from "../db/schema";
-import { getCurrentUser, loginUser, registerUser } from "../services/users-service";
+import { getCurrentUser, loginUser, logoutUser, registerUser } from "../services/users-service";
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
@@ -42,6 +42,21 @@ const publicUserRoutes = new Elysia({ prefix: "/api/users" })
       const token = auth.slice(7);
       const data = await getCurrentUser(token);
       return { data };
+    } catch {
+      set.status = 401;
+      return { error: "Unauthorized" };
+    }
+  })
+  .delete("/logout", async ({ headers, set }) => {
+    const auth = headers["authorization"];
+    if (!auth?.startsWith("Bearer ")) {
+      set.status = 401;
+      return { error: "Unauthorized" };
+    }
+    try {
+      const token = auth.slice(7);
+      await logoutUser(token);
+      return { data: "ok" };
     } catch {
       set.status = 401;
       return { error: "Unauthorized" };

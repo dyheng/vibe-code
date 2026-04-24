@@ -64,3 +64,11 @@ export async function registerUser(name: string, email: string, password: string
   const hashedPassword = await Bun.password.hash(password);
   await db.insert(users).values({ name, email, password: hashedPassword });
 }
+
+export async function logoutUser(token: string): Promise<void> {
+  const sessionRows = await db.select().from(sessions).where(eq(sessions.token, token)).limit(1);
+  if (sessionRows.length === 0) {
+    throw new Error("Unauthorized");
+  }
+  await db.delete(sessions).where(eq(sessions.token, token));
+}
